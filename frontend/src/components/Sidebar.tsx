@@ -3,13 +3,15 @@ type NavItem = {
   href: string;
 };
 
-const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "Log action", href: "/log" },
-  { label: "Challenges", href: "/challenges" },
-  { label: "Society", href: "/society" },
-  // later: { label: "Moderation", href: "/moderation" },
+const navItems = [
+  { label: "Dashboard", href: "/app/dashboard" },
+  { label: "Groups", href: "/app/groups" },
+  { label: "Challenges", href: "/app/challenges" },
+  { label: "Log action", href: "/app/log-action" },
+  { label: "Leaderboards", href: "/app/leaderboards" },
+  { label: "Profile", href: "/app/profile" },
 ];
+
 
 export default function Sidebar() {
   return (
