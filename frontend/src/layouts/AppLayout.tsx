@@ -1,10 +1,7 @@
+import { Outlet } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 
-type AppLayoutProps = {
-  children: React.ReactNode;
-};
-
-export default function AppLayout({ children }: AppLayoutProps) {
+export default function AppLayout() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50/40 to-white">
       <div className="mx-auto flex max-w-6xl">
@@ -17,7 +14,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             <div className="text-xs text-gray-500">Menu later</div>
           </div>
 
-          {children}
+          <Outlet />
         </main>
       </div>
     </div>
