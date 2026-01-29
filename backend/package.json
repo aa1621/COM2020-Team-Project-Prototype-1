@@ -1,0 +1,31 @@
+{
+  "name": "com2020-team-project-backend",
+  "version": "1.0.0",
+  "description": "Backend API for the COM2020 Team Project web app",
+  "homepage": "https://github.com/Flynnpen/COM2020-Team-Project#readme",
+  "bugs": {
+    "url": "https://github.com/Flynnpen/COM2020-Team-Project/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Flynnpen/COM2020-Team-Project.git"
+  },
+  "license": "MIT",
+  "author": "The 67 Carbon Gooners",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.93.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}
