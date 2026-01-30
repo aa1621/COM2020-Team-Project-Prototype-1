@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 
 import actionTypesRoutes from './routes/actionTypes.route.js';
+import actionLogsRoutes from './routes/actionLogs.route.js';
 
 const app = express();
 
@@ -13,6 +14,7 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/action-types', actionTypesRoutes);
+app.use('/action-logs', actionLogsRoutes);
 
 app.get('/errortest', (req, res) => {
     throw new Error("Testing error");
