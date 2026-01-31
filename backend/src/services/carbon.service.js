@@ -1,4 +1,4 @@
-
+const round = n => Math.round(n * 1000) / 1000;
 
 function confidenceFromUncertainty(u) {
     if (u == null) return "Medium";

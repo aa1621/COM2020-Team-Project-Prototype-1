@@ -3,6 +3,7 @@ import cors from 'cors';
 
 import actionTypesRoutes from './routes/actionTypes.route.js';
 import actionLogsRoutes from './routes/actionLogs.route.js';
+import submissionsRoutes from './routes/submissions.route.js';
 
 const app = express();
 
@@ -15,6 +16,7 @@ app.get('/health', (req, res) => {
 
 app.use('/action-types', actionTypesRoutes);
 app.use('/action-logs', actionLogsRoutes);
+app.use('/', submissionsRoutes);
 
 app.get('/errortest', (req, res) => {
     throw new Error("Testing error");
