@@ -14,6 +14,9 @@ app.use(express.json());
 app.get('/health', (req, res) => {
     res.json({status: "ok"});
 });
+app.get('/version', (req, res) => {
+    res.json({version: "week5-demo"});
+});
 
 app.use('/action-types', actionTypesRoutes);
 app.use('/action-logs', actionLogsRoutes);
