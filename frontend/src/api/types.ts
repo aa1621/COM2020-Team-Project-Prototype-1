@@ -42,7 +42,15 @@ export type ActionLog = {
 };
 
 export type GetActionTypesResponse = {
-  actionTypes: ActionType[];
+  actionTypes: Array<{
+    action_type_id: string | number;
+    key: string;
+    category: string;
+    name: string;
+    unit: string;
+    default_factor_id: string | number | null;
+    factor: any | null;
+  }>;
 };
 
 export type CreateActionLogRequest = {
@@ -52,8 +60,22 @@ export type CreateActionLogRequest = {
 };
 
 export type CreateActionLogResponse = {
-  log: ActionLog;
-  calculation: CarbonCalculation;
+  log: {
+    user_id: string;
+    action_type_id: string | number;
+    quantity: number;
+    action_date: string;
+    evidence_required: boolean;
+    calculated_co2e: number;
+    score: number;
+  };
+  calculation: {
+    estimateKgCO2e: number;
+    rangeKgCO2e: { min: number; max: number };
+    factor: { value: number; unit: string };
+    confidence: "Low" | "Medium" | "High";
+    caveat: string;
+  };
   actionType: {
     key: string;
     name: string;
