@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import PageShell from "../components/PageShell";
 import { apiFetch } from "../api/client";
+import { getDemoUserId } from "../auth/demoAuth";
 import type {
   ActionType,
   GetActionTypesResponse,
   CreateActionLogResponse,
 } from "../api/types";
-
-// For week 5 demo this is hardcoded user
-// Later this will become real login/auth.
-const DEMO_USER_ID = "c1aae9c3-5157-4a26-a7b3-28d8905cfef0";
 
 export default function LogActionPage() {
   const [actionTypes, setActionTypes] = useState<ActionType[]>([]);
@@ -56,6 +53,8 @@ export default function LogActionPage() {
     setResult(null);
 
     const qty = Number(quantity);
+    const demoUserId = getDemoUserId();
+    if (!demoUserId) return setError("Please sign in to submit an action.");
     if (!selectedKey) return setError("Please select an action.");
     if (!Number.isFinite(qty) || qty <= 0)
       return setError("Quantity must be a positive number.");
@@ -66,7 +65,7 @@ export default function LogActionPage() {
 
       const res = await apiFetch<CreateActionLogResponse>("/action-logs", {
         method: "POST",
-        headers: { "x-user-id": DEMO_USER_ID },
+        headers: { "x-user-id": demoUserId },
         body: JSON.stringify({
           action_type_key: selectedKey,
           quantity: qty,

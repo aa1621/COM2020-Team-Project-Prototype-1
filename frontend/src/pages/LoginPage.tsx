@@ -1,8 +1,36 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageShell from "../components/PageShell";
+import { loginDemo } from "../api/auth";
+import { setDemoUser } from "../auth/demoAuth";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+
+    if (!username.trim() || !password) {
+      setError("Please enter your username and password.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await loginDemo(username.trim(), password);
+      setDemoUser(res.user);
+      navigate("/app/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50/40 to-white p-6">
@@ -11,28 +39,41 @@ export default function LoginPage() {
           title="Login"
           subtitle="Use a demo login for CW1. Real auth can be added later."
         >
-          <div className="space-y-3">
+          <form className="space-y-3" onSubmit={onSubmit}>
             <input
               className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm"
-              placeholder="Email"
+              placeholder="Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="username"
             />
             <input
               className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm"
               placeholder="Password"
               type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
             />
 
             <button
+              type="submit"
               className="w-full rounded-xl bg-gray-900 px-4 py-3 text-sm font-medium text-white hover:bg-gray-800"
-              onClick={() => navigate("/app/dashboard")}
+              disabled={submitting}
             >
-              Sign in (demo)
+              {submitting ? "Signing in..." : "Sign in"}
             </button>
+
+            {error && (
+              <div className="rounded-xl bg-red-50 p-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
 
             <p className="text-xs text-gray-500">
               For CW1, this can be a demo flow. Later: JWT + role-based access.
             </p>
-          </div>
+          </form>
         </PageShell>
       </div>
     </div>

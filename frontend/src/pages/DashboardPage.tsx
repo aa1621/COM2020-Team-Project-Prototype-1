@@ -1,9 +1,16 @@
+import { getDemoUser } from "../auth/demoAuth";
+
 export default function DashboardPage() {
+  const user = getDemoUser();
+  const displayName = user?.display_name || user?.username || "there";
+
   return (
     <div className="space-y-6">
       {/* Page heading */}
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold text-gray-900">Hi Flynn 👋</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">
+          Hi {displayName} 👋
+        </h1>
         <p className="text-sm text-gray-600">
           Here’s your sustainability progress so far.
         </p>
