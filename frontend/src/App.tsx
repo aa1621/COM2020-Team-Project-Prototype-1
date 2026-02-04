@@ -30,7 +30,7 @@ export default function App() {
       </Route>
 
       {/* Default */}
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      {/*<Route path="/" element={<Navigate to="/login" replace />} /> */}
       <Route path="*" element={<div className="p-6">Not found</div>} />
     </Routes>
   );
