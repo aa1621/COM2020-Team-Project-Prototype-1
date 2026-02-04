@@ -1,16 +1,18 @@
 import express from 'express';
 import cors from 'cors';
 
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
 import actionTypesRoutes from './routes/actionTypes.route.js';
 import actionLogsRoutes from './routes/actionLogs.route.js';
 import submissionsRoutes from './routes/submissions.route.js';
 import challengesRoutes from './routes/challenges.route.js';
 import moderationRoutes from './routes/moderation.route.js';
 
-const app = express();
 
-app.use(cors());
-app.use(express.json());
 
 app.get('/health', (req, res) => {
     res.json({status: "ok"});
