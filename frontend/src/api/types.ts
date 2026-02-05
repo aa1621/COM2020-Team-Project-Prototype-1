@@ -83,3 +83,15 @@ export type CreateActionLogResponse = {
     unit: string;
   };
 };
+
+export type ActionLogListResponse = {
+  logs: Array<{
+    log_id: string | number;
+    user_id: string;
+    action_type_id: string | number;
+    quantity: number;
+    action_date: string;
+    calculated_co2e: number;
+    score: number;
+  }>;
+};

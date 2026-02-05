@@ -102,3 +102,32 @@ export async function createActionLog(req, res, next) {
         next(err);
     }
 }
+
+export async function listActionLogs(req, res, next) {
+    try {
+        const demoUserId = normalizeUserId(req.header("x-user-id") || req.query.user_id);
+        if (!demoUserId) {
+            return res.status(400).json({
+                error: 'Missing user id. For now pass header "x-user-id" (or query user_id)',
+            });
+        }
+
+        const { start, end } = req.query;
+
+        let query = supabaseUser
+            .from("action_logs")
+            .select("log_id, user_id, action_type_id, quantity, action_date, calculated_co2e, score")
+            .eq("user_id", demoUserId)
+            .order("action_date", { ascending: true });
+
+        if (start) query = query.gte("action_date", start);
+        if (end) query = query.lte("action_date", end);
+
+        const { data: logs, error } = await query;
+        if (error) return next(error);
+
+        return res.status(200).json({ logs: logs ?? [] });
+    } catch (err) {
+        next(err);
+    }
+}
