@@ -7,21 +7,26 @@ import type { Group } from "../api/types";
 type Tab = "Invites" | "My groups" | "Find group" | "Send invite";
 
 export default function GroupsPage() {
+  // tabs UI state - keep basic for now
   const [tab, setTab] = useState<Tab>("My groups");
   const tabs: Tab[] = ["My groups", "Find group", "Invites", "Send invite"];
+
+  // data + UI flags
   const [groups, setGroups] = useState<Group[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // true while we fetch groups list
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [joining, setJoining] = useState<string | null>(null);
-  const [user, setUser] = useState(() => getDemoUser());
+  const [joining, setJoining] = useState<string | null>(null); // group id being joined
+  const [user, setUser] = useState(() => getDemoUser()); // read once at start
 
   useEffect(() => {
+    // initial page load: fetch all groups for list + current group lookup
     async function load() {
       setLoading(true);
       setError(null);
       try {
         const res = await getGroups();
+        // backend returns { groups: [] }, just drop into state
         setGroups(res.groups || []);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load groups.");
@@ -33,26 +38,30 @@ export default function GroupsPage() {
     load();
   }, []);
 
+  // pull user's current group from loaded group list
   const currentGroup = useMemo(() => {
     if (!user?.group_id) return null;
     return groups.find((group) => group.group_id === user.group_id) || null;
   }, [groups, user]);
 
   const filteredGroups = useMemo(() => {
+    // simple client-side filter so we don't hit backend on every keypress
     const term = search.trim().toLowerCase();
     if (!term) return groups;
     return groups.filter((group) => group.name.toLowerCase().includes(term));
   }, [groups, search]);
 
   async function handleJoin(groupId: string | null) {
+    // groupId === null means "leave group"
     if (!user) {
       setError("Please log in before joining a group.");
       return;
     }
 
-    setJoining(groupId || "leave");
+    setJoining(groupId || "leave"); // used to disable the button + change label
     setError(null);
     try {
+      // NOTE: this updates the user record with group_id on backend
       const res = await joinGroup(groupId, user.user_id);
       setDemoUser(res.user);
       setUser(res.user);

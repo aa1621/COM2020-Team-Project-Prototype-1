@@ -7,19 +7,23 @@ import type { UserLeaderboardEntry } from "../api/types";
 type Scope = "all" | "group";
 
 export default function LeaderboardsPage() {
+  // main data list + UI flags
   const [entries, setEntries] = useState<UserLeaderboardEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // show spinner text
   const [error, setError] = useState<string | null>(null);
-  const [scope, setScope] = useState<Scope>("all");
-  const user = useMemo(() => getDemoUser(), []);
+  const [scope, setScope] = useState<Scope>("all"); // all users vs my group
+  const user = useMemo(() => getDemoUser(), []); // cached user read
 
   useEffect(() => {
+    // refresh list when scope changes (all users vs my group)
     async function load() {
       setLoading(true);
       setError(null);
       try {
+        // if "My group" is selected, pass group_id to backend
         const groupId = scope === "group" ? user?.group_id || undefined : undefined;
         const res = await getUserLeaderboards(groupId);
+        // backend returns { leaderboards: [] }
         setEntries(res.leaderboards || []);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load leaderboards.");
@@ -73,6 +77,7 @@ export default function LeaderboardsPage() {
               </div>
             )}
             {entries.map((entry, index) => {
+              // highlight the current user in the list
               const isMe = user?.user_id === entry.user_id;
               const displayName = entry.display_name || entry.username;
               return (
