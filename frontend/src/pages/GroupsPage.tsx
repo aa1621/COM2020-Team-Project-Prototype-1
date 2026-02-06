@@ -1,11 +1,67 @@
-import { useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import PageShell from "../components/PageShell";
+import { getGroups, joinGroup } from "../api/groups";
+import { getDemoUser, setDemoUser } from "../auth/demoAuth";
+import type { Group } from "../api/types";
 
 type Tab = "Invites" | "My groups" | "Find group" | "Send invite";
 
 export default function GroupsPage() {
-  const [tab, setTab] = useState<Tab>("Invites");
-  const tabs: Tab[] = ["Invites", "My groups", "Find group", "Send invite"];
+  const [tab, setTab] = useState<Tab>("My groups");
+  const tabs: Tab[] = ["My groups", "Find group", "Invites", "Send invite"];
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [joining, setJoining] = useState<string | null>(null);
+  const [user, setUser] = useState(() => getDemoUser());
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await getGroups();
+        setGroups(res.groups || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load groups.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, []);
+
+  const currentGroup = useMemo(() => {
+    if (!user?.group_id) return null;
+    return groups.find((group) => group.group_id === user.group_id) || null;
+  }, [groups, user]);
+
+  const filteredGroups = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return groups;
+    return groups.filter((group) => group.name.toLowerCase().includes(term));
+  }, [groups, search]);
+
+  async function handleJoin(groupId: string | null) {
+    if (!user) {
+      setError("Please log in before joining a group.");
+      return;
+    }
+
+    setJoining(groupId || "leave");
+    setError(null);
+    try {
+      const res = await joinGroup(groupId, user.user_id);
+      setDemoUser(res.user);
+      setUser(res.user);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update group.");
+    } finally {
+      setJoining(null);
+    }
+  }
 
   return (
     <PageShell title="Groups" subtitle="Join societies, manage invites, and build community.">
@@ -24,59 +80,99 @@ export default function GroupsPage() {
       </div>
 
       <div className="rounded-2xl border border-gray-100 bg-white/80 p-6 shadow-sm">
-        {tab === "Invites" && (
-          <div className="space-y-3">
-            <div className="text-sm font-medium text-gray-900">Pending invites</div>
-            <div className="rounded-xl bg-white p-4 flex items-center justify-between">
-              <div>
-                <div className="text-sm text-gray-800">Cycling Society</div>
-                <div className="text-xs text-gray-500">Invited by: Alex</div>
-              </div>
-              <div className="flex gap-2">
-                <button className="rounded-xl bg-gray-900 px-3 py-2 text-xs text-white">Accept</button>
-                <button className="rounded-xl bg-gray-100 px-3 py-2 text-xs text-gray-800">Decline</button>
-              </div>
-            </div>
+        {error && (
+          <div className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+            {error}
           </div>
         )}
 
-        {tab === "My groups" && (
+        {loading && <div className="text-sm text-gray-600">Loading groups...</div>}
+
+        {!loading && tab === "My groups" && (
           <div className="space-y-3">
-            <div className="text-sm font-medium text-gray-900">Groups you are in</div>
-            <ul className="space-y-2">
-              {["Eco Society", "Hiking Society"].map((g) => (
-                <li key={g} className="rounded-xl bg-white p-4 text-sm text-gray-800">
-                  {g}
-                </li>
-              ))}
-            </ul>
+            <div className="text-sm font-medium text-gray-900">Your group</div>
+            {currentGroup ? (
+              <div className="rounded-xl bg-white p-4">
+                <div className="text-sm text-gray-800">{currentGroup.name}</div>
+                <div className="text-xs text-gray-500">
+                  {currentGroup.type || "Society"} · {currentGroup.member_count || 0} members
+                </div>
+                <button
+                  onClick={() => handleJoin(null)}
+                  className="mt-3 rounded-xl bg-gray-100 px-3 py-2 text-xs text-gray-800"
+                  disabled={joining === "leave"}
+                >
+                  {joining === "leave" ? "Leaving..." : "Leave group"}
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-xl bg-white p-4 text-sm text-gray-700">
+                You are not in a group yet. Head to "Find group" to join one.
+              </div>
+            )}
           </div>
         )}
 
-        {tab === "Find group" && (
+        {!loading && tab === "Find group" && (
           <div className="space-y-3">
             <div className="text-sm font-medium text-gray-900">Find a group</div>
             <input
               className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm"
-              placeholder="Search societies…"
+              placeholder="Search societies..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
-            <div className="rounded-xl bg-white p-4 text-sm text-gray-800">
-              Example result: “Sustainability Society” <span className="text-xs text-gray-500">(Join)</span>
+            <div className="space-y-2">
+              {filteredGroups.length === 0 && (
+                <div className="rounded-xl bg-white p-4 text-sm text-gray-700">
+                  No groups match your search.
+                </div>
+              )}
+              {filteredGroups.map((group) => {
+                const isCurrent = user?.group_id === group.group_id;
+                return (
+                  <div key={group.group_id} className="rounded-xl bg-white p-4 flex items-center justify-between">
+                    <div>
+                      <div className="text-sm text-gray-800">{group.name}</div>
+                      <div className="text-xs text-gray-500">
+                        {group.type || "Society"} · {group.member_count || 0} members
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleJoin(group.group_id)}
+                      className={`rounded-xl px-3 py-2 text-xs ${
+                        isCurrent ? "bg-gray-200 text-gray-700" : "bg-gray-900 text-white"
+                      }`}
+                      disabled={isCurrent || joining === group.group_id}
+                    >
+                      {isCurrent ? "Current" : joining === group.group_id ? "Joining..." : "Join"}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {tab === "Send invite" && (
+        {!loading && tab === "Invites" && (
+          <div className="space-y-3">
+            <div className="text-sm font-medium text-gray-900">Pending invites</div>
+            <div className="rounded-xl bg-white p-4 text-sm text-gray-700">
+              Invites are not wired up yet.
+            </div>
+          </div>
+        )}
+
+        {!loading && tab === "Send invite" && (
           <div className="space-y-3">
             <div className="text-sm font-medium text-gray-900">Send an invite</div>
             <input
               className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm"
-              placeholder="Search for a user (name/email)…"
+              placeholder="Search for a user (name or email)..."
             />
             <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm">
-              <option>Invite to… (choose a society you’re in)</option>
-              <option>Eco Society</option>
-              <option>Hiking Society</option>
+              <option>Invite to... (choose a society you are in)</option>
+              {currentGroup && <option>{currentGroup.name}</option>}
             </select>
             <button className="rounded-xl bg-gray-900 px-4 py-3 text-sm font-medium text-white">
               Send invite (demo)

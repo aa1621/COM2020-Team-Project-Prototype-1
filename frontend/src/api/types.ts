@@ -1,4 +1,4 @@
-export type ConversionFactor = {
+﻿export type ConversionFactor = {
   factor_id: string | number;
   source: string | null;
   unit_in: string;     // e.g. km
@@ -94,4 +94,40 @@ export type ActionLogListResponse = {
     calculated_co2e: number;
     score: number;
   }>;
+};
+
+export type Group = {
+  group_id: string;
+  name: string;
+  type: string | null;
+  created_at: string;
+  member_count?: number;
+};
+
+export type GroupsListResponse = {
+  groups: Group[];
+};
+
+export type JoinGroupResponse = {
+  user: {
+    user_id: string;
+    username: string;
+    display_name: string | null;
+    role: string | null;
+    group_id: string | null;
+  };
+  group: Group | null;
+};
+
+export type UserLeaderboardEntry = {
+  user_id: string;
+  username: string;
+  display_name: string | null;
+  group_id: string | null;
+  group_name: string | null;
+  points: number;
+};
+
+export type UserLeaderboardsResponse = {
+  leaderboards: UserLeaderboardEntry[];
 };

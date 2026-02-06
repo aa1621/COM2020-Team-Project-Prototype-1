@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import cors from 'cors';
 
 const app = express();
@@ -12,6 +12,8 @@ import authRoutes from './routes/auth.route.js';
 import submissionsRoutes from './routes/submissions.route.js';
 import challengesRoutes from './routes/challenges.route.js';
 import moderationRoutes from './routes/moderation.route.js';
+import groupsRoutes from './routes/groups.route.js';
+import leaderboardsRoutes from './routes/leaderboards.route.js';
 
 
 
@@ -25,6 +27,8 @@ app.get('/version', (req, res) => {
 app.use('/action-types', actionTypesRoutes);
 app.use('/action-logs', actionLogsRoutes);
 app.use('/auth', authRoutes);
+app.use('/groups', groupsRoutes);
+app.use('/leaderboards', leaderboardsRoutes);
 app.use('/', submissionsRoutes);
 app.use('/', challengesRoutes);
 app.use('/', moderationRoutes);
