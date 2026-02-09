@@ -28,6 +28,8 @@ export async function createSubmission(req, res, next) {
 
         const groupId = req.body?.groupId ?? null;
 
+        const evidence = req.body?.evidence ?? null;
+
         const totalCO2eFromBody = req.body?.total_co2e;
         const logIds = Array.isArray(req.body?.log_ids) ? req.body.log_ids : null;
 
@@ -58,6 +60,12 @@ export async function createSubmission(req, res, next) {
         const scoringObj = safeParseJson(challenge.scoring, {points_per_kg: 10});
 
         const evidenceRequired = rulesObj?.evidence_required === true;
+
+        if (evidenceRequired && !evidence) {
+            return res.status(400).json({
+                error: "Evidence is required for this challenge. Please submit evidence."
+            });
+        }
 
         let totalCO2eKg = 0;
 
@@ -92,6 +100,7 @@ export async function createSubmission(req, res, next) {
             group_id: groupId,
             points,
             status,
+            evidence,
         };
 
         const {data: inserted, error: insErr} = await supabaseUser

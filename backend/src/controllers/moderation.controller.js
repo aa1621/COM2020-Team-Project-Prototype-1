@@ -19,7 +19,7 @@ export async function getModerationQueue(req, res, next) {
 
         const {data, error} = await supabaseAdmin
             .from("submissions")
-            .select("submission_id, challenge_id, user_id, group_id, points, status")
+            .select("submission_id, challenge_id, user_id, group_id, points, status, evidence")
             .eq("status", status)
             .order("points", {ascending: false})
             .limit(limit);
@@ -37,27 +37,55 @@ export async function decideSubmission(req, res, next) {
         if (!requireModerator(req, res)) return;
 
         const {submissionId} = req.params;
+        const moderatorId = req.header("x-user-id");
         const decision = req.body?.decision;
+        const reason = req.body?.reason ?? null;
+
+        if (!moderatorId) {
+            return res.status(400).json({error: 'Missing moderator id (user header "x-user-id")'});
+        }
 
         if (!decision || !["approve", "reject"].includes(decision)) {
             return res.status(400).json({error: 'decision must be "approve" or "reject"'});
         }
 
-        const newStatus = decision === "approve" ? "approved" : "rejected";
-
-        const {data: existing, error: getErr} = await supabaseAdmin
+        const {data: submission, error: subErr} = await supabaseAdmin
             .from("submissions")
             .select("submission_id, status")
             .eq("submission_id", submissionId)
             .single();
 
-        if (getErr) return next(getErr);
-        if (!existing) return res.status(404).json({error: "Submission not found"});
-
-        // Only allow decisions to be made on submissions that are pending review (We can easily comment this out if need be)
-        if(existing.status !== "pending_review") {
-            return res.status(400).json({error: `Cannot decide submissions with status "${existing.status}". Expected "pending_review`,});
+        if (submission.user_id === moderatorId) {
+            return res.status(403).json({
+                error: "Moderators cannot review their own submissions."
+            });
         }
+
+        if (subErr) return next(subErr);
+        if (!submission) return res.status(404).json({error: "Submission not found"});
+
+        if (submission.status !== "pending_review") {
+            return res.status(400).json({
+                error: `Cannot decide submission with status "${submission.status}". Expected "pending_review".`,
+            });
+        }
+
+        const newStatus = decision === "approve" ? "approved" : "rejected";
+
+        const {data: decisionRow, error: decErr} = await supabaseAdmin
+            .from("moderation_decisions")
+            .insert({
+                submission_id: submissionId,
+                moderator_id: moderatorId,
+                decision,
+                reason,
+                decision_timestamp: new Date().toISOString(),
+            })
+            .select("*")
+            .single();
+
+        if (decErr) return next(decErr);
+
 
         const {data: updated, error: updErr} = await supabaseAdmin
             .from("submissions")
@@ -68,7 +96,7 @@ export async function decideSubmission(req, res, next) {
 
         if (updErr) return next(updErr);
 
-        res.json({submission: updated});
+        res.json({submission: updated, moderationDecision: decisionRow});
     } catch (err) {
         next(err);
     }
