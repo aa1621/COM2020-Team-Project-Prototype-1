@@ -71,6 +71,14 @@ export async function joinGroup(req, res, next) {
             group = groupRow;
         }
 
+        const {data: currentUser} = await supabaseUser
+            .from("users")
+            .select("group_id")
+            .eq("user_id", demoUserId)
+            .single();
+
+        const previousGroupId = currentUser?.group_id ?? null;
+
         const { data: updatedUser, error: updateError } = await supabaseAdmin
             .from("users")
             .update({ group_id: groupId })
@@ -80,7 +88,76 @@ export async function joinGroup(req, res, next) {
 
         if (updateError) return next(updateError);
 
-        return res.status(200).json({ user: updatedUser, group });
+        if (groupId) {
+            await supabaseAdmin
+                .from("group_memberships")
+                .upsert(
+                    {group_id: groupId, user_id: demoUserId, role:"member"},
+                    {onConflict: "group_id,user_id"}
+                );
+        } else if (previousGroupId) {
+            await supabaseAdmin
+                .from("group_memberships")
+                .delete()
+                .eq("user_id", demoUserId)
+                .eq("group_id", previousGroupId);
+        }
+
+        return res.status(200).json({ user: updatedUser, group }); 
+
+       
+    } catch (err) {
+        next(err);
+    }
+}
+
+export async function createGroup(req, res, next) {
+    try {
+        const demoUserId = normalizeUserId(req.header("x-user-id") || req.body?.user_id);
+        if (!demoUserId) {
+            return res.status(400).json({
+                error: 'Missing user id. For now use header "x-user-id" (or body user_id)',
+            });
+        }
+
+        const name = (req.body?.name || "").trim();
+        if (!name) {
+            return res.status(400).json({error: "Group name is required"});
+        }
+
+        const type = (req.body?.type || "society").trim();
+
+        const {data: group, error: groupErr} = await supabaseAdmin
+            .from("groups")
+            .insert({
+                name,
+                type,
+                created_by: demoUserId,
+            })
+            .select("group_id, name, type, created_at, created_by")
+            .single();
+
+        if (groupErr) return next(groupErr);
+
+        const {data: updatedUser, error: updateErr} = await supabaseAdmin
+            .from("users")
+            .update({group_id: group.group_id})
+            .eq("user_id", demoUserId)
+            .select("user_id, username, display_name, role, group_id")
+            .single();
+
+        if (updateErr) return next(updateErr);
+
+        const {error: membershipErr} = await supabaseAdmin
+            .from("group_memberships")
+            .upsert(
+                {group_id: group.group_id, user_id: demoUserId, role: "moderator"},
+                {onConflict: "group_id,user_id"}
+            );
+
+        if (membershipErr) return next(membershipErr);
+
+        return res.status(201).json({group, user: updatedUser});
     } catch (err) {
         next(err);
     }

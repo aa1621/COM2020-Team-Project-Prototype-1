@@ -3,10 +3,18 @@ import { safeParseJson } from "../services/challengeRules.service.js";
 
 export async function listChallenges(req, res, next) {
     try {
-        const {data, error} = await supabaseUser
+        const type = req.query.type;
+
+        let q = supabaseUser
             .from("challenges")
-            .select("challenge_id, title, rules, scoring, start_date, end_date")
-            .order("start_date", {ascending: false});
+            .select("challenge_id, title, challenge_type, rules, scoring, start_date, end_date")
+            .order("state_date", {ascending: false});
+
+        if (type) {
+            q = q.eq("challenge_type", type);
+        }
+
+        const {data, error} = await q;
 
         if (error) return next(error);
 
@@ -28,7 +36,7 @@ export async function getChallenge(req, res, next) {
 
         const {data, error} = await supabaseUser
             .from("challenges")
-            .select("challenge_id, title, rules, scoring, start_date, end_date")
+            .select("challenge_id, title, challenge_type, rules, scoring, start_date, end_date")
             .eq("challenge_id", challengeId)
             .single();
 

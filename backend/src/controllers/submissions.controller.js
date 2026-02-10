@@ -26,7 +26,7 @@ export async function createSubmission(req, res, next) {
             });
         }
 
-        const groupId = req.body?.groupId ?? null;
+        const groupId = req.body?.group_id ?? null;
 
         const evidence = req.body?.evidence ?? null;
 
@@ -41,12 +41,26 @@ export async function createSubmission(req, res, next) {
         
         const { data: challenge, error: chError} = await supabaseUser
             .from("challenges")
-            .select("challenge_id, title, rules, scoring, start_date, end_date")
+            .select("challenge_id, title, challenge_type, rules, scoring, start_date, end_date")
             .eq("challenge_id", challengeId)
             .single();
 
         if (chError) return next(chError);
         if (!challenge) return res.status(404).json({error: "Challenge not found"});
+
+        const challengeType = challenge.challenge_type;
+
+        if (challengeType === "group") {
+            if (!groupId) {
+                return res.status(400).json({error: "groupId is required for group challenges"});
+            }
+        } else {
+            if (groupId) {
+                return res.status(400).json({
+                    error: `groupId is not allowed for ${challengeType} challenges`,
+                });
+            }
+        }
 
         const today = new Date().toISOString().slice(0, 10);
         if (challenge.start_date && today < challenge.start_date) {
