@@ -10,7 +10,7 @@ Run:
 
    cd backend
 
-2. Run unit tests: Unit tests:
+2. Run unit tests: 
 
 Test login rejection and success.
 
