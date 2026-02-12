@@ -8,7 +8,7 @@ export async function listChallenges(req, res, next) {
         let q = supabaseUser
             .from("challenges")
             .select("challenge_id, title, challenge_type, rules, scoring, start_date, end_date")
-            .order("state_date", {ascending: false});
+            .order("start_date", {ascending: false});
 
         if (type) {
             q = q.eq("challenge_type", type);

@@ -131,3 +131,62 @@ export type UserLeaderboardEntry = {
 export type UserLeaderboardsResponse = {
   leaderboards: UserLeaderboardEntry[];
 };
+
+export type ChallengeRules = {
+  evidence_required?: boolean;
+  [key: string]: any;
+};
+
+export type ChallengeScoring = {
+  points_per_kg?: number;
+  [key: string]: any;
+};
+
+export type Challenge = {
+  challenge_id: string;
+  title: string;
+  challenge_type?: "group" | "personal" | string;
+  rules: ChallengeRules;
+  scoring: ChallengeScoring;
+  start_date: string | null;
+  end_date: string | null;
+};
+
+export type ChallengeListResponse = {
+  challenges: Challenge[];
+};
+
+export type ChallengeSubmission = {
+  submission_id: string;
+  challenge_id: string;
+  user_id: string;
+  group_id: string | null;
+  points: number;
+  status: string;
+  evidence?: string | null;
+};
+
+export type ChallengeSubmissionsResponse = {
+  submissions: ChallengeSubmission[];
+};
+
+export type CreateChallengeSubmissionRequest = {
+  total_co2e?: number;
+  log_ids?: string[];
+  evidence?: string | null;
+  groupId?: string | null;
+  userId?: string;
+};
+
+export type CreateChallengeSubmissionResponse = {
+  submission: ChallengeSubmission;
+  computed: {
+    totalCO2eKg: number;
+    evidenceRequired: boolean;
+    scoring: ChallengeScoring;
+  };
+  challenge: {
+    challenge_id: string;
+    title: string;
+  };
+};
