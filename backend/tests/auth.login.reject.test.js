@@ -1,36 +1,42 @@
-import { jest } from "@jest/globals";
 import request from "supertest";
+import { jest } from "@jest/globals";
 
-// Mock supabase BEFORE importing app.js
+// ---- Mock Supabase (so tests do NOT hit the real network) ----
+const mockSingle = jest.fn();
+
+const mockEq2 = jest.fn(() => ({ single: mockSingle }));
+const mockEq1 = jest.fn(() => ({ eq: mockEq2 }));
+const mockSelect = jest.fn(() => ({ eq: mockEq1 }));
+const mockFrom = jest.fn(() => ({ select: mockSelect }));
+
 jest.unstable_mockModule("../src/lib/supabaseClient.js", () => {
-  // Build a fake query chain:
-  // supabaseAdmin.from().select().eq().eq().single()
-  const fakeQuery = {
-    select: () => fakeQuery,
-    eq: () => fakeQuery,
-    single: async () => {
-      // Simulate "no rows" error Supabase gives when .single() finds nothing
-      return { data: null, error: { code: "PGRST116" } };
-    }
-  };
-
-  const supabaseAdmin = {
-    from: () => fakeQuery
-  };
-
   return {
-    supabaseAdmin,
-    supabaseUser: {} // not used in login
+    supabaseAdmin: { from: mockFrom },
+    // app imports this too in some places, so keep it defined
+    supabaseUser: {}
   };
 });
 
-// Now import app AFTER mocks are set
+// Import app AFTER mocking (important)
 const { default: app } = await import("../src/app.js");
 
 const LOGIN_PATH = "/auth/login";
 
-describe("Login rejection tests", () => {
+beforeEach(() => {
+  mockSingle.mockReset();
+  mockFrom.mockClear();
+  mockSelect.mockClear();
+  mockEq1.mockClear();
+  mockEq2.mockClear();
+});
+
+describe("Auth login tests", () => {
   test("rejects wrong password", async () => {
+    mockSingle.mockResolvedValue({
+      data: null,
+      error: { code: "PGRST116" } // your controller treats this as invalid credentials
+    });
+
     const res = await request(app).post(LOGIN_PATH).send({
       username: "demouser",
       password: "wrongpassword"
@@ -41,6 +47,11 @@ describe("Login rejection tests", () => {
   });
 
   test("rejects wrong username", async () => {
+    mockSingle.mockResolvedValue({
+      data: null,
+      error: { code: "PGRST116" }
+    });
+
     const res = await request(app).post(LOGIN_PATH).send({
       username: "wronguser",
       password: "demopassword"
@@ -58,6 +69,11 @@ describe("Login rejection tests", () => {
   });
 
   test("rejects SQL injection attempt", async () => {
+    mockSingle.mockResolvedValue({
+      data: null,
+      error: { code: "PGRST116" }
+    });
+
     const res = await request(app).post(LOGIN_PATH).send({
       username: "demouser",
       password: "' OR '1'='1"
@@ -66,5 +82,29 @@ describe("Login rejection tests", () => {
     expect(res.status).toBe(401);
     expect(res.body).toEqual({ error: "Invalid credentials." });
   });
+
+  test("logs in successfully with correct credentials", async () => {
+    const mockUser = {
+      user_id: 1,
+      username: "demouser",
+      display_name: "Demo User",
+      role: "user",
+      group_id: 1
+    };
+
+    mockSingle.mockResolvedValue({
+      data: mockUser,
+      error: null
+    });
+
+    const res = await request(app).post(LOGIN_PATH).send({
+      username: "demouser",
+      password: "demopassword"
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ user: mockUser });
+  });
 });
+
 
