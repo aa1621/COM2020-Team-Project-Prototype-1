@@ -105,8 +105,40 @@ export async function createSubmission(req, res, next) {
             return res.status(400).json({error: "total_co2e must be a positive number"});
         }
 
+        const flags = [];
+
+        const MAX_CO2E_KG_PER_SUBMISSION = 200;
+        const WINDOW_SECONDS = 120;
+        const MAX_SUBMISSIONS_IN_WINDOW = 3;
+
+        const since = new Date(Date.now() - WINDOW_SECONDS * 1000).toISOString();
+
+        const {data: recent, error: recentErr} = await supabaseUser
+            .from("submissions")
+            .select("submission_id")
+            .eq("user_id", demoUserId)
+            .gte("created_at", since);
+
+        if (recentErr) return next(recentErr);
+
+        if ((recent ?? []).length >= MAX_SUBMISSIONS_IN_WINDOW) {
+            flags.push({
+                flag_type: "rate_limit_submission",
+                rule_triggered: `>=${MAX_SUBMISSIONS_IN_WINDOW} submissions within ${WINDOW_SECONDS}s`,
+            });
+        }
+        if (totalCO2eKg > MAX_CO2E_KG_PER_SUBMISSION) {
+            flags.push({
+                flag_type: "impossible_value",
+                rule_triggered: `totalCO2eKg (${totalCO2eKg}) exceeds max (${MAX_CO2E_KG_PER_SUBMISSION})`,
+            });
+        }
+
+
+
         const points = calculatePoints(totalCO2eKg, scoringObj);
-        const status = evidenceRequired ? "pending_review" : "approved";
+        let status = evidenceRequired ? "pending_review" : "approved";
+        if (flags.length > 0) status = "pending_review";
 
         const insertRow = {
             challenge_id: challenge.challenge_id,
@@ -125,6 +157,21 @@ export async function createSubmission(req, res, next) {
 
         if (insErr) return next(insErr);
 
+        if (flags.length > 0) {
+            const rows = flags.map(f => ({
+                submission_id: inserted.submission_id,
+                flag_type: f.flag_type,
+                rule_triggered: f.rule_triggered,
+                status: "open",
+            }));
+
+            const {error: flagErr} = await supabaseUser
+                .from("anti_gaming_flags")
+                .insert(rows);
+
+            if (flagErr) return next(flagErr);
+        }
+
         return res.status(201).json({
             submission: inserted,
             computed: {
@@ -135,6 +182,9 @@ export async function createSubmission(req, res, next) {
             challenge: {
                 challenge_id: challenge.challenge_id,
                 title: challenge.title,
+            },
+            antiGaming: {
+                flagged: flags.length > 0, flags
             },
         });
     } catch (err) {
