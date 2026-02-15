@@ -1,9 +1,11 @@
+import { getDemoUser } from "../auth/demoAuth";
+
 type NavItem = {
   label: string;
   href: string;
 };
 
-const navItems = [
+const baseNavItems: NavItem[] = [
   { label: "Dashboard", href: "/app/dashboard" },
   { label: "Groups", href: "/app/groups" },
   { label: "Challenges", href: "/app/challenges" },
@@ -14,6 +16,16 @@ const navItems = [
 
 
 export default function Sidebar() {
+  const user = getDemoUser();
+  const canModerate = user?.role === "moderator" || user?.role === "maintainer";
+  const navItems: NavItem[] = canModerate
+    ? [
+        ...baseNavItems.slice(0, 5),
+        { label: "Moderation", href: "/app/moderation" },
+        ...baseNavItems.slice(5),
+      ]
+    : baseNavItems;
+
   function handleLogout() {
     localStorage.removeItem("demo_user");
     window.location.href = "/login";

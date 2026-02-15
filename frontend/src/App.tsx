@@ -9,6 +9,7 @@ import ChallengesPage from "./pages/ChallengesPage";
 import LogActionPage from "./pages/LogActionPage";
 import LeaderboardsPage from "./pages/LeaderboardsPage";
 import HomePage from "./pages/HomePage";
+import ModerationPage from "./pages/ModerationPage";
 import RequireAuth from "./auth/RequireAuth";
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="profile" element={<ProfilePage />} />
           <Route path="groups" element={<GroupsPage />} />
           <Route path="challenges" element={<ChallengesPage />} />
+          <Route path="moderation" element={<ModerationPage />} />
           <Route path="log-action" element={<LogActionPage />} />
           <Route path="leaderboards" element={<LeaderboardsPage />} />
           <Route index element={<Navigate to="/app/dashboard" replace />} />

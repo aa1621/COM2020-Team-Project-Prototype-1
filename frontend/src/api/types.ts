@@ -202,19 +202,32 @@ export type ChallengeSubmission = {
   group_id: string | null;
   points: number;
   status: string;
-  evidence?: string | null;
+  evidence?: SubmissionEvidence | string | null;
 };
 
 export type ChallengeSubmissionsResponse = {
   submissions: ChallengeSubmission[];
 };
 
+export type SubmissionEvidenceImage = {
+  name: string;
+  mime_type: string;
+  data_url: string;
+};
+
+export type SubmissionEvidence = {
+  text?: string;
+  images?: SubmissionEvidenceImage[];
+};
+
 export type CreateChallengeSubmissionRequest = {
   total_co2e?: number;
   log_ids?: string[];
-  evidence?: string | null;
+  evidence?: SubmissionEvidence | string | null;
   groupId?: string | null;
+  group_id?: string | null;
   userId?: string;
+  user_id?: string;
 };
 
 export type CreateChallengeSubmissionResponse = {
@@ -228,4 +241,22 @@ export type CreateChallengeSubmissionResponse = {
     challenge_id: string;
     title: string;
   };
+};
+
+export type ModerationDecision = {
+  moderation_decision_id?: string;
+  submission_id: string;
+  moderator_id: string;
+  decision: "approve" | "reject" | string;
+  reason: string | null;
+  decision_timestamp?: string;
+};
+
+export type ModerationQueueResponse = {
+  submissions: ChallengeSubmission[];
+};
+
+export type DecideSubmissionResponse = {
+  submission: ChallengeSubmission;
+  moderationDecision: ModerationDecision;
 };

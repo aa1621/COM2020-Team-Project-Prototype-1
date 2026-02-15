@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import PageShell from "../components/PageShell";
 import {
   createChallengeSubmission,
@@ -6,14 +6,31 @@ import {
   getChallenges,
 } from "../api/challenges";
 import { getDemoUser, getDemoUserId } from "../auth/demoAuth";
-import type { Challenge, ChallengeSubmission } from "../api/types";
+import type {
+  Challenge,
+  ChallengeSubmission,
+  SubmissionEvidenceImage,
+} from "../api/types";
 
 type Tab = "Group challenges" | "Personal challenges";
 type TimeFilter = "Daily" | "Weekly" | "Monthly" | "Seasonal";
+type ChallengeWindow = "current" | "past";
+
+const MAX_EVIDENCE_IMAGES = 3;
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function ChallengesPage() {
   const [tab, setTab] = useState<Tab>("Group challenges");
   const [time, setTime] = useState<TimeFilter>("Weekly");
+  const [windowFilter, setWindowFilter] = useState<ChallengeWindow>("current");
 
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -24,20 +41,19 @@ export default function ChallengesPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [totalCO2e, setTotalCO2e] = useState("1");
-  const [evidence, setEvidence] = useState("");
+  const [evidenceText, setEvidenceText] = useState("");
+  const [evidenceImages, setEvidenceImages] = useState<SubmissionEvidenceImage[]>([]);
   const [lastResult, setLastResult] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadChallenges() {
       setLoading(true);
       setError(null);
-      setSelectedId(null);
       try {
         const type = tab === "Group challenges" ? "group" : "personal";
         const res = await getChallenges(type);
         const list = res.challenges || [];
         setChallenges(list);
-        setSelectedId(list[0]?.challenge_id ?? null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load challenges.");
       } finally {
@@ -47,6 +63,35 @@ export default function ChallengesPage() {
 
     loadChallenges();
   }, [tab]);
+
+  const filteredChallenges = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return challenges.filter((challenge) => {
+      const isPast = Boolean(challenge.end_date && challenge.end_date < today);
+      return windowFilter === "past" ? isPast : !isPast;
+    });
+  }, [challenges, windowFilter]);
+
+  useEffect(() => {
+    if (filteredChallenges.length === 0) {
+      setSelectedId(null);
+      return;
+    }
+    const stillVisible = filteredChallenges.some((c) => c.challenge_id === selectedId);
+    if (!stillVisible) {
+      setSelectedId(filteredChallenges[0].challenge_id);
+    }
+  }, [filteredChallenges, selectedId]);
+
+  const selectedChallenge = useMemo(
+    () => filteredChallenges.find((c) => c.challenge_id === selectedId) ?? null,
+    [filteredChallenges, selectedId]
+  );
+
+  const requiresEvidence = useMemo(
+    () => selectedChallenge?.rules?.evidence_required === true,
+    [selectedChallenge]
+  );
 
   useEffect(() => {
     async function loadSubmissions() {
@@ -68,10 +113,42 @@ export default function ChallengesPage() {
     loadSubmissions();
   }, [selectedId]);
 
-  const selectedChallenge = useMemo(
-    () => challenges.find((c) => c.challenge_id === selectedId) ?? null,
-    [challenges, selectedId]
-  );
+  async function handleEvidenceFilesChange(e: ChangeEvent<HTMLInputElement>) {
+    setSubmitError(null);
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (files.length === 0) return;
+
+    const allowedSlots = MAX_EVIDENCE_IMAGES - evidenceImages.length;
+    if (allowedSlots <= 0) {
+      setSubmitError(`You can upload up to ${MAX_EVIDENCE_IMAGES} images.`);
+      return;
+    }
+
+    const selected = files.slice(0, allowedSlots);
+    const nonImage = selected.find((file) => !file.type.startsWith("image/"));
+    if (nonImage) {
+      setSubmitError(`"${nonImage.name}" is not an image file.`);
+      return;
+    }
+
+    try {
+      const mapped = await Promise.all(
+        selected.map(async (file) => ({
+          name: file.name,
+          mime_type: file.type || "image/*",
+          data_url: await readFileAsDataUrl(file),
+        }))
+      );
+      setEvidenceImages((prev) => [...prev, ...mapped]);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Failed to load selected images.");
+    }
+  }
+
+  function removeEvidenceImage(index: number) {
+    setEvidenceImages((prev) => prev.filter((_, idx) => idx !== index));
+  }
 
   async function handleSubmit() {
     setSubmitError(null);
@@ -94,22 +171,42 @@ export default function ChallengesPage() {
       return;
     }
 
+    if (requiresEvidence && evidenceImages.length === 0 && !evidenceText.trim()) {
+      setSubmitError("This challenge requires evidence. Add a note or at least one image.");
+      return;
+    }
+
+    const text = evidenceText.trim();
+    const evidencePayload =
+      requiresEvidence && (text || evidenceImages.length > 0)
+        ? {
+            text: text || undefined,
+            images: evidenceImages.length > 0 ? evidenceImages : undefined,
+          }
+        : null;
+
     setSubmitting(true);
     try {
       const isGroup = selectedChallenge.challenge_type === "group";
+      const groupId = isGroup ? user?.group_id ?? null : null;
+
       const res = await createChallengeSubmission(
         selectedChallenge.challenge_id,
         {
           total_co2e: total,
-          evidence: evidence.trim() ? evidence.trim() : null,
-          groupId: isGroup ? user?.group_id ?? null : null,
+          evidence: evidencePayload,
+          groupId,
+          group_id: groupId,
           userId: demoUserId,
+          user_id: demoUserId,
         },
         demoUserId
       );
       setLastResult(
         `Submitted. Status: ${res.submission.status}. Points: ${res.submission.points}.`
       );
+      setEvidenceText("");
+      setEvidenceImages([]);
       const refresh = await getChallengeSubmissions(
         selectedChallenge.challenge_id,
         { limit: 20 }
@@ -161,6 +258,28 @@ export default function ChallengesPage() {
             ? "This week's society challenge"
             : `Personal challenges • ${time}`}
         </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setWindowFilter("current")}
+            className={`rounded-full px-3 py-1 text-xs ${
+              windowFilter === "current"
+                ? "bg-gray-900 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            Current
+          </button>
+          <button
+            onClick={() => setWindowFilter("past")}
+            className={`rounded-full px-3 py-1 text-xs ${
+              windowFilter === "past"
+                ? "bg-gray-900 text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            Past
+          </button>
+        </div>
         {error && (
           <div className="rounded-xl bg-red-50 p-3 text-sm text-red-700">
             {error}
@@ -169,19 +288,19 @@ export default function ChallengesPage() {
         {loading && (
           <div className="text-sm text-gray-600">Loading challenges...</div>
         )}
-        {!loading && challenges.length === 0 && (
+        {!loading && filteredChallenges.length === 0 && (
           <div className="rounded-xl bg-white p-4 text-sm text-gray-700">
-            No challenges available yet.
+            No {windowFilter} challenges available.
           </div>
         )}
-        {!loading && challenges.length > 0 && (
+        {!loading && filteredChallenges.length > 0 && (
           <div className="space-y-3">
             <select
               className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm"
               value={selectedId ?? ""}
               onChange={(e) => setSelectedId(e.target.value)}
             >
-              {challenges.map((c) => (
+              {filteredChallenges.map((c) => (
                 <option key={c.challenge_id} value={c.challenge_id}>
                   {c.title}
                 </option>
@@ -212,12 +331,54 @@ export default function ChallengesPage() {
                 value={totalCO2e}
                 onChange={(e) => setTotalCO2e(e.target.value)}
               />
-              <input
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-                placeholder="Evidence (optional unless required)"
-                value={evidence}
-                onChange={(e) => setEvidence(e.target.value)}
-              />
+              {requiresEvidence && (
+                <>
+                  <textarea
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                    placeholder="Evidence notes (required note or image)"
+                    rows={3}
+                    value={evidenceText}
+                    onChange={(e) => setEvidenceText(e.target.value)}
+                  />
+                  <div className="space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-3">
+                    <div className="text-xs text-gray-700">
+                      Upload evidence images (max {MAX_EVIDENCE_IMAGES})
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="w-full text-xs text-gray-700"
+                      onChange={handleEvidenceFilesChange}
+                    />
+                    {evidenceImages.length > 0 && (
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {evidenceImages.map((image, index) => (
+                          <div key={`${image.name}-${index}`} className="space-y-1">
+                            <img
+                              src={image.data_url}
+                              alt={image.name}
+                              className="h-24 w-full rounded-lg object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeEvidenceImage(index)}
+                              className="w-full rounded-md bg-white px-2 py-1 text-[11px] text-gray-700"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+              {!requiresEvidence && (
+                <div className="rounded-xl bg-gray-50 p-2 text-xs text-gray-600">
+                  Evidence is not required for this challenge.
+                </div>
+              )}
               <button
                 onClick={handleSubmit}
                 disabled={submitting || !selectedChallenge}
