@@ -179,7 +179,7 @@ export async function createInvite(req, res, next) {
       .from("groups")
       .select("group_id, name, type, created_at, created_by")
       .eq("group_id", groupId)
-      .single();
+      .maybeSingle();
 
     if (gErr) return next(gErr);
     if (!group) return res.status(404).json({ error: "Group not found" });
@@ -198,7 +198,7 @@ export async function createInvite(req, res, next) {
         .from("users")
         .select("user_id, username, display_name, group_id")
         .eq("user_id", invited_user_id)
-        .single();
+        .maybeSingle();
 
       if (error) return next(error);
       invitedUser = data;
@@ -207,7 +207,7 @@ export async function createInvite(req, res, next) {
         .from("users")
         .select("user_id, username, display_name, group_id")
         .eq("username", username)
-        .single();
+        .maybeSingle();
 
       if (error) return next(error);
       invitedUser = data;
