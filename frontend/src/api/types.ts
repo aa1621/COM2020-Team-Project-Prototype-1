@@ -119,6 +119,45 @@ export type JoinGroupResponse = {
   group: Group | null;
 };
 
+export type InviteUser = {
+  user_id: string;
+  username: string;
+  display_name: string | null;
+};
+
+export type GroupInvite = {
+  invite_id: string;
+  group_id: string;
+  invited_user_id: string;
+  invited_by_user_id: string;
+  status: "pending" | "accepted" | "declined" | string;
+  message: string | null;
+  created_at: string;
+  responded_at: string | null;
+  groups?: Pick<Group, "group_id" | "name" | "type"> | null;
+  inviter?: InviteUser | null;
+};
+
+export type ListInvitesResponse = {
+  invites: GroupInvite[];
+};
+
+export type RespondToInviteResponse = {
+  invite: GroupInvite;
+};
+
+export type CreateInviteRequest = {
+  username?: string;
+  invited_user_id?: string;
+  message?: string;
+};
+
+export type CreateInviteResponse = {
+  invite: GroupInvite;
+  group: Pick<Group, "group_id" | "name" | "type">;
+  invitedUser: InviteUser;
+};
+
 export type UserLeaderboardEntry = {
   user_id: string;
   username: string;

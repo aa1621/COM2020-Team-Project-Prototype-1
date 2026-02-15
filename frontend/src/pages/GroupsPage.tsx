@@ -1,32 +1,37 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PageShell from "../components/PageShell";
 import { getGroups, joinGroup } from "../api/groups";
+import { createInvite, getInvites, respondToInvite } from "../api/invites";
 import { getDemoUser, setDemoUser } from "../auth/demoAuth";
-import type { Group } from "../api/types";
+import type { Group, GroupInvite } from "../api/types";
 
 type Tab = "Invites" | "My groups" | "Find group" | "Send invite";
 
 export default function GroupsPage() {
-  // tabs UI state - keep basic for now
   const [tab, setTab] = useState<Tab>("My groups");
   const tabs: Tab[] = ["My groups", "Find group", "Invites", "Send invite"];
 
-  // data + UI flags
   const [groups, setGroups] = useState<Group[]>([]);
-  const [loading, setLoading] = useState(true); // true while we fetch groups list
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [joining, setJoining] = useState<string | null>(null); // group id being joined
-  const [user, setUser] = useState(() => getDemoUser()); // read once at start
+  const [joining, setJoining] = useState<string | null>(null);
+  const [user, setUser] = useState(() => getDemoUser());
+
+  const [invites, setInvites] = useState<GroupInvite[]>([]);
+  const [invitesLoading, setInvitesLoading] = useState(false);
+  const [inviteActionId, setInviteActionId] = useState<string | null>(null);
+  const [inviteTarget, setInviteTarget] = useState("");
+  const [inviteMessage, setInviteMessage] = useState("");
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [inviteResult, setInviteResult] = useState<string | null>(null);
 
   useEffect(() => {
-    // initial page load: fetch all groups for list + current group lookup
     async function load() {
       setLoading(true);
       setError(null);
       try {
         const res = await getGroups();
-        // backend returns { groups: [] }, just drop into state
         setGroups(res.groups || []);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load groups.");
@@ -38,30 +43,50 @@ export default function GroupsPage() {
     load();
   }, []);
 
-  // pull user's current group from loaded group list
+  useEffect(() => {
+    async function loadInvitesForUser(demoUserId: string) {
+      setInvitesLoading(true);
+      setError(null);
+      try {
+        const res = await getInvites(demoUserId);
+        setInvites(res.invites || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load invites.");
+      } finally {
+        setInvitesLoading(false);
+      }
+    }
+
+    if (tab === "Invites" && user?.user_id) {
+      loadInvitesForUser(user.user_id);
+    }
+  }, [tab, user?.user_id]);
+
   const currentGroup = useMemo(() => {
     if (!user?.group_id) return null;
     return groups.find((group) => group.group_id === user.group_id) || null;
   }, [groups, user]);
 
   const filteredGroups = useMemo(() => {
-    // simple client-side filter so we don't hit backend on every keypress
     const term = search.trim().toLowerCase();
     if (!term) return groups;
     return groups.filter((group) => group.name.toLowerCase().includes(term));
   }, [groups, search]);
 
+  const pendingInvites = useMemo(
+    () => invites.filter((invite) => invite.status === "pending"),
+    [invites]
+  );
+
   async function handleJoin(groupId: string | null) {
-    // groupId === null means "leave group"
     if (!user) {
       setError("Please log in before joining a group.");
       return;
     }
 
-    setJoining(groupId || "leave"); // used to disable the button + change label
+    setJoining(groupId || "leave");
     setError(null);
     try {
-      // NOTE: this updates the user record with group_id on backend
       const res = await joinGroup(groupId, user.user_id);
       setDemoUser(res.user);
       setUser(res.user);
@@ -69,6 +94,76 @@ export default function GroupsPage() {
       setError(err instanceof Error ? err.message : "Could not update group.");
     } finally {
       setJoining(null);
+    }
+  }
+
+  async function handleInviteResponse(invite: GroupInvite, decision: "accept" | "decline") {
+    if (!user) {
+      setError("Please log in before managing invites.");
+      return;
+    }
+
+    setInviteActionId(invite.invite_id);
+    setError(null);
+    setInviteResult(null);
+    try {
+      const res = await respondToInvite(invite.invite_id, decision, user.user_id);
+      setInvites((prev) =>
+        prev.map((item) => (item.invite_id === invite.invite_id ? { ...item, ...res.invite } : item))
+      );
+
+      if (decision === "accept") {
+        const updatedUser = { ...user, group_id: invite.group_id };
+        setDemoUser(updatedUser);
+        setUser(updatedUser);
+      }
+
+      setInviteResult(decision === "accept" ? "Invite accepted." : "Invite declined.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not respond to invite.");
+    } finally {
+      setInviteActionId(null);
+    }
+  }
+
+  async function handleSendInvite() {
+    if (!user) {
+      setError("Please log in before sending invites.");
+      return;
+    }
+
+    if (!currentGroup) {
+      setError("Join a group before sending invites.");
+      return;
+    }
+
+    const username = inviteTarget.trim();
+    if (!username) {
+      setError("Enter a username to invite.");
+      return;
+    }
+
+    setSendingInvite(true);
+    setError(null);
+    setInviteResult(null);
+    try {
+      const res = await createInvite(
+        currentGroup.group_id,
+        {
+          username,
+          message: inviteMessage.trim() || undefined,
+        },
+        user.user_id
+      );
+
+      const targetName = res.invitedUser.display_name || res.invitedUser.username;
+      setInviteResult(`Invite sent to ${targetName}.`);
+      setInviteTarget("");
+      setInviteMessage("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send invite.");
+    } finally {
+      setSendingInvite(false);
     }
   }
 
@@ -89,9 +184,11 @@ export default function GroupsPage() {
       </div>
 
       <div className="rounded-2xl border border-gray-100 bg-white/80 p-6 shadow-sm">
-        {error && (
-          <div className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
-            {error}
+        {error && <div className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
+        {inviteResult && (
+          <div className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">
+            {inviteResult}
           </div>
         )}
 
@@ -140,7 +237,10 @@ export default function GroupsPage() {
               {filteredGroups.map((group) => {
                 const isCurrent = user?.group_id === group.group_id;
                 return (
-                  <div key={group.group_id} className="rounded-xl bg-white p-4 flex items-center justify-between">
+                  <div
+                    key={group.group_id}
+                    className="rounded-xl bg-white p-4 flex items-center justify-between"
+                  >
                     <div>
                       <div className="text-sm text-gray-800">{group.name}</div>
                       <div className="text-xs text-gray-500">
@@ -166,26 +266,98 @@ export default function GroupsPage() {
         {!loading && tab === "Invites" && (
           <div className="space-y-3">
             <div className="text-sm font-medium text-gray-900">Pending invites</div>
-            <div className="rounded-xl bg-white p-4 text-sm text-gray-700">
-              Invites are not wired up yet.
-            </div>
+            {!user && (
+              <div className="rounded-xl bg-white p-4 text-sm text-gray-700">
+                Please log in to view invites.
+              </div>
+            )}
+            {user && invitesLoading && (
+              <div className="rounded-xl bg-white p-4 text-sm text-gray-700">Loading invites...</div>
+            )}
+            {user && !invitesLoading && pendingInvites.length === 0 && (
+              <div className="rounded-xl bg-white p-4 text-sm text-gray-700">No pending invites.</div>
+            )}
+            {user && !invitesLoading && pendingInvites.length > 0 && (
+              <div className="space-y-2">
+                {pendingInvites.map((invite) => {
+                  const isWorking = inviteActionId === invite.invite_id;
+                  const inviterName =
+                    invite.inviter?.display_name || invite.inviter?.username || "A group member";
+                  return (
+                    <div
+                      key={invite.invite_id}
+                      className="rounded-xl bg-white p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <div className="text-sm text-gray-800">{invite.groups?.name || "Group invite"}</div>
+                        <div className="text-xs text-gray-500">Invited by {inviterName}</div>
+                        {invite.message && (
+                          <div className="mt-1 text-xs text-gray-600">{invite.message}</div>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleInviteResponse(invite, "decline")}
+                          className="rounded-xl bg-gray-100 px-3 py-2 text-xs text-gray-800"
+                          disabled={isWorking}
+                        >
+                          {isWorking ? "Working..." : "Decline"}
+                        </button>
+                        <button
+                          onClick={() => handleInviteResponse(invite, "accept")}
+                          className="rounded-xl bg-gray-900 px-3 py-2 text-xs text-white"
+                          disabled={isWorking}
+                        >
+                          {isWorking ? "Working..." : "Accept"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
         {!loading && tab === "Send invite" && (
           <div className="space-y-3">
             <div className="text-sm font-medium text-gray-900">Send an invite</div>
-            <input
-              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm"
-              placeholder="Search for a user (name or email)..."
-            />
-            <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm">
-              <option>Invite to... (choose a society you are in)</option>
-              {currentGroup && <option>{currentGroup.name}</option>}
-            </select>
-            <button className="rounded-xl bg-gray-900 px-4 py-3 text-sm font-medium text-white">
-              Send invite (demo)
-            </button>
+            {!user && (
+              <div className="rounded-xl bg-white p-4 text-sm text-gray-700">
+                Please log in to send invites.
+              </div>
+            )}
+            {user && !currentGroup && (
+              <div className="rounded-xl bg-white p-4 text-sm text-gray-700">
+                You must be in a group before you can invite others.
+              </div>
+            )}
+            {user && currentGroup && (
+              <>
+                <div className="rounded-xl bg-gray-50 p-3 text-xs text-gray-600">
+                  Inviting to: {currentGroup.name}
+                </div>
+                <input
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm"
+                  placeholder="Enter username..."
+                  value={inviteTarget}
+                  onChange={(e) => setInviteTarget(e.target.value)}
+                />
+                <input
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm"
+                  placeholder="Optional message..."
+                  value={inviteMessage}
+                  onChange={(e) => setInviteMessage(e.target.value)}
+                />
+                <button
+                  onClick={handleSendInvite}
+                  className="rounded-xl bg-gray-900 px-4 py-3 text-sm font-medium text-white"
+                  disabled={sendingInvite}
+                >
+                  {sendingInvite ? "Sending..." : "Send invite"}
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
