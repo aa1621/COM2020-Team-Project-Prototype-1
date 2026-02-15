@@ -13,6 +13,7 @@ import submissionsRoutes from './routes/submissions.route.js';
 import challengesRoutes from './routes/challenges.route.js';
 import moderationRoutes from './routes/moderation.route.js';
 import groupsRoutes from './routes/groups.route.js';
+import invitesRoutes from './routes/invites.route.js';
 import leaderboardsRoutes from './routes/leaderboards.route.js';
 
 
@@ -28,6 +29,7 @@ app.use('/action-types', actionTypesRoutes);
 app.use('/action-logs', actionLogsRoutes);
 app.use('/auth', authRoutes);
 app.use('/groups', groupsRoutes);
+app.use('/invites', invitesRoutes);
 app.use('/leaderboards', leaderboardsRoutes);
 app.use('/', submissionsRoutes);
 app.use('/', challengesRoutes);

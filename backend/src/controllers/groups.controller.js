@@ -162,3 +162,97 @@ export async function createGroup(req, res, next) {
         next(err);
     }
 }
+
+export async function createInvite(req, res, next) {
+  try {
+    //console.log("BODY:", req.body);
+
+    const inviterId = normalizeUserId(req.header("x-user-id") || req.body?.user_id);
+    if (!inviterId) {
+      return res.status(400).json({ error: 'Missing user id (header "x-user-id")' });
+    }
+
+    const { groupId } = req.params;
+    const message = (req.body?.message || "").trim() || null;
+
+    const { data: group, error: gErr } = await supabaseUser
+      .from("groups")
+      .select("group_id, name, type, created_at, created_by")
+      .eq("group_id", groupId)
+      .single();
+
+    if (gErr) return next(gErr);
+    if (!group) return res.status(404).json({ error: "Group not found" });
+
+    const invited_user_id = req.body?.invited_user_id ?? null;
+    const username = (req.body?.username || "").trim();
+
+    if (!invited_user_id && !username) {
+      return res.status(400).json({ error: 'Provide "invited_user_id" or "username"' });
+    }
+
+    let invitedUser = null;
+
+    if (invited_user_id) {
+      const { data, error } = await supabaseUser
+        .from("users")
+        .select("user_id, username, display_name, group_id")
+        .eq("user_id", invited_user_id)
+        .single();
+
+      if (error) return next(error);
+      invitedUser = data;
+    } else {
+      const { data, error } = await supabaseUser
+        .from("users")
+        .select("user_id, username, display_name, group_id")
+        .eq("username", username)
+        .single();
+
+      if (error) return next(error);
+      invitedUser = data;
+    }
+
+    if (!invitedUser) return res.status(404).json({ error: "Invited user not found" });
+    if (invitedUser.user_id === inviterId) {
+      return res.status(400).json({ error: "You cannot invite yourself" });
+    }
+
+    if (invitedUser.group_id === groupId) {
+      return res.status(409).json({ error: "User is already in the group" });
+    }
+
+    const { data: invite, error: iErr } = await supabaseAdmin
+      .from("group_invites")
+      .insert({
+        group_id: groupId,
+        invited_user_id: invitedUser.user_id,
+        invited_by_user_id: inviterId,
+        message,
+        status: "pending",
+      })
+      .select("*")
+      .single();
+
+    if (iErr) {
+      if (iErr.code === "23505") {
+        return res
+          .status(409)
+          .json({ error: "An invite is already pending for this user in this group." });
+      }
+      return next(iErr);
+    }
+
+    return res.status(201).json({
+      invite,
+      group: { group_id: group.group_id, name: group.name, type: group.type },
+      invitedUser: {
+        user_id: invitedUser.user_id,
+        username: invitedUser.username,
+        display_name: invitedUser.display_name,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
